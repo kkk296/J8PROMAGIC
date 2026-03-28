@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>J8PRO — Live Magic Dashboard</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel-bg: #111111;
+      --card-bg: #1a1a1a;
+      --text-main: #ffffff;
+      --text-muted: #888888;
+      --accent-green: #00ff9f;
+      --accent-red: #ff4a4a;
+      --accent-blue: #06b6d4;
+      --accent-purple: #8b5cf6; /* Magic Purple */
+      --border: #333333;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* --- LOCK SCREEN STYLES --- */
+    #lockScreen {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+      z-index: 99999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .lock-box {
+      background: rgba(20, 20, 20, 0.9);
+      padding: 40px;
+      border-radius: 20px;
+      border: 1px solid var(--accent-purple);
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
+      text-align: center;
+      width: 300px;
+    }
+    .lock-input {
+      width: 100%;
+      padding: 12px;
+      margin: 20px 0;
+      background: #000;
+      border: 1px solid var(--border);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 16px;
+      text-align: center;
+      outline: none;
+    }
+    .lock-input:focus { border-color: var(--accent-purple); }
+    .lock-btn {
+      background: linear-gradient(90deg, #8b5cf6, #06b6d4);
+      border: none;
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .lock-btn:hover { opacity: 0.9; }
+    .error-msg { color: var(--accent-red); font-size: 13px; height: 20px; margin-top: 10px; }
+
+    /* --- MAIN APP (Hidden until unlocked) --- */
+    #mainApp {
+      display: none; /* Initially hidden */
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* --- Header & Nav --- */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 25px;
+      background: linear-gradient(90deg, #050505, #111);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      font-size: 20px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #06b6d4, #8b5cf6, #ff4a4a);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientText 5s ease infinite;
+      background-size: 200% auto;
+    }
+
+    @keyframes gradientText {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .refresh-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover { border-color: var(--accent-purple); }
+
+    /* --- Layout Structure --- */
+    .app-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar (Stock List) */
+    .sidebar {
+      width: 380px;
+      background: var(--panel-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1;
+      padding: 15px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: 0.2s;
+      background: var(--card-bg);
+    }
+    .tab.active {
+      color: #fff;
+      background: var(--panel-bg);
+      border-bottom: 2px solid var(--accent-purple);
+    }
+    .tab[data-type="buy"].active { border-bottom-color: var(--accent-green); color: var(--accent-green); }
+    .tab[data-type="sell"].active { border-bottom-color: var(--accent-red); color: var(--accent-red); }
+
+    .stock-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .stock-item {
+      padding: 12px 15px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stock-item:hover { background: #222; }
+    .stock-item.selected { background: #2a2a2a; border-left: 3px solid var(--accent-purple); }
+    .stock-item.buy-signal { border-left: 3px solid var(--accent-green); }
+    .stock-item.sell-signal { border-left: 3px solid var(--accent-red); }
+
+    .s-name { font-weight: 700; font-size: 14px; display: block; }
+    .s-price { font-size: 13px; color: var(--text-muted); }
+    .s-change { font-size: 12px; font-weight: 600; }
+    .s-change.up { color: var(--accent-green); }
+    .s-change.down { color: var(--accent-red); }
+
+    /* Content Area (Dashboard) */
+    .content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Top Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .stat-value { font-size: 18px; font-weight: 700; margin-top: 5px; }
+    .c-green { color: var(--accent-green); }
+    .c-red { color: var(--accent-red); }
+    .c-purple { color: var(--accent-purple); }
+
+    /* Magic Calculator Section */
+    .gann-panel {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+    }
+
+    .gann-controls { display: flex; flex-direction: column; gap: 15px; }
+    
+    .input-group { display: flex; flex-direction: column; gap: 5px; }
+    .input-group label { font-size: 12px; color: var(--text-muted); }
+    input, select {
+      background: #000;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent-purple); }
+
+    .levels-box { display: flex; gap: 20px; }
+    .levels-col { flex: 1; }
+    .levels-col h3 { font-size: 14px; margin: 0 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid #333; }
+    .levels-col.buy h3 { color: var(--accent-green); border-color: rgba(0,255,159,0.3); }
+    .levels-col.sell h3 { color: var(--accent-red); border-color: rgba(255,74,74,0.3); }
+
+    .level-row {
+      display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0;
+      border-bottom: 1px dashed #222;
+    }
+
+    /* Alert Input Styling */
+    .alert-active-buy { border-color: var(--accent-green) !important; box-shadow: 0 0 10px var(--accent-green); }
+    .alert-active-sell { border-color: var(--accent-red) !important; box-shadow: 0 0 10px var(--accent-red); }
+
+    /* Popup / Toast Container */
+    #popup-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .popup-card {
+      background: #111;
+      border-left: 4px solid #fff;
+      padding: 15px 20px;
+      border-radius: 4px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+      min-width: 280px;
+      animation: slideIn 0.3s ease-out;
+      color: #fff;
+    }
+    .popup-card.buy { border-color: var(--accent-green); }
+    .popup-card.sell { border-color: var(--accent-red); }
+    .popup-card.alert { border-color: #f59e0b; } 
+    .popup-title { font-weight: bold; margin-bottom: 4px; font-size: 14px; }
+    .popup-msg { font-size: 12px; color: #ccc; }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Loader */
+    .loader { display: none; text-align: center; padding: 20px; color: var(--text-muted); }
+    .loader.active { display: block; }
+    
+    @media(max-width: 900px) {
+      .app-container { flex-direction: column; overflow: auto; }
+      .sidebar { width: 100%; height: 300px; }
+      .gann-panel { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOCK SCREEN -->
+  <div id="lockScreen">
+    <div class="lock-box">
+      <h2 class="brand" style="font-size:24px; margin-bottom: 10px;">🔐 J8PRO LOCKED</h2>
+      <p style="color:#666; font-size:13px;">Access Restricted for Clients</p>
+      <input type="password" id="passwordInput" class="lock-input" placeholder="Enter Password">
+      <button class="lock-btn" onclick="checkPassword()">UNLOCK DASHBOARD</button>
+      <div id="errorMsg" class="error-msg">Incorrect Password!</div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <header>
+    <div class="brand">🪄 J8PRO — LIVE MAGIC DASHBOARD</div>
+    <button class="refresh-btn" onclick="initApp()">🔄 Refresh Data</button>
+  </header>
+
+  <div id="mainApp" class="app-container">
+    <!-- Sidebar: Buy/Sell Lists -->
+    <aside class="sidebar">
+      <div class="tabs">
+        <div class="tab active" data-type="buy" onclick="switchTab('buy')">🟢 Buy Signals</div>
+        <div class="tab" data-type="sell" onclick="switchTab('sell')">🔴 Sell Signals</div>
+      </div>
+      
+      <div class="stock-list" id="stockListContainer">
+        <div class="loader" id="loader">Fetching Live Market Data...</div>
+        <!-- Stock items injected here -->
+      </div>
+    </aside>
+
+    <!-- Main Dashboard Area -->
+    <section class="content">
+      
+      <!-- OHLC Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Yesterday Open</div>
+          <div class="stat-value" id="ohlc-o">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Yesterday High</div>
+          <div class="stat-value" id="ohlc-h">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Yesterday Low</div>
+          <div class="stat-value" id="ohlc-l">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Yesterday Close</div>
+          <div class="stat-value" id="ohlc-c">—</div>
+        </div>
+      </div>
+
+      <!-- Calculator Interface -->
+      <div class="gann-panel">
+        <div class="gann-controls">
+          <h3 style="margin:0; color:#fff; font-size:16px;">🔮 J8PRO MAGIC LEVELS</h3>
+          
+          <div class="input-group">
+            <label>Symbol</label>
+            <input type="text" id="inpSymbol" readonly style="opacity: 0.7;">
+          </div>
+
+          <div class="input-group">
+            <label>Base Price Source</label>
+            <select id="inpBase" onchange="updateInputPrice()">
+              <option value="prevClose" selected>Yesterday's Close</option>
+              <option value="prevHigh">Yesterday's High</option>
+              <option value="prevLow">Yesterday's Low</option>
+              <option value="live">Live Price</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label>Calculation Price</label>
+            <input type="number" id="inpPrice" step="0.05">
+          </div>
+
+          <div class="input-group">
+            <label>Breakout Alert Price</label>
+            <input type="number" id="inpAlert" placeholder="Enter price for alert..." step="0.05">
+          </div>
+
+          <div class="input-group">
+            <label>Multiplier (Default 1)</label>
+            <select id="inpMult">
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="3">3x</option>
+              <option value="4">4x</option>
+              <option value="5">5x</option>
+              <option value="8">8x</option>
+              <option value="10">10x</option>
+              <option value="12">12x</option>
+              <option value="24">24x</option>
+              <option value="32">32x</option>
+              <option value="64">64x</option>
+              <option value="100">100x</option>
+            </select>
+          </div>
+
+          <button onclick="manualCalculate()" style="background: var(--accent-purple); border: none; padding: 12px; border-radius: 6px; color: #fff; font-weight: 700; cursor: pointer;">✨ Calculate Levels</button>
+        </div>
+
+        <div class="levels-box">
+          <div class="levels-col buy">
+            <h3>BUY LEVELS</h3>
+            <div class="level-row"><span>Buy Above</span><span id="buy-entry">—</span></div>
+            <div class="level-row"><span>Avg</span><span id="buy-avg">—</span></div>
+            <div class="level-row"><span>Stoploss</span><span id="buy-sl">—</span></div>
+            <div class="level-row"><span>Tgt 1</span><span id="buy-t1">—</span></div>
+            <div class="level-row"><span>Tgt 2</span><span id="buy-t2">—</span></div>
+            <div class="level-row"><span>Tgt 3</span><span id="buy-t3">—</span></div>
+          </div>
+          <div class="levels-col sell">
+            <h3>SELL LEVELS</h3>
+            <div class="level-row"><span>Sell Below</span><span id="sell-entry">—</span></div>
+            <div class="level-row"><span>Avg</span><span id="sell-avg">—</span></div>
+            <div class="level-row"><span>Stoploss</span><span id="sell-sl">—</span></div>
+            <div class="level-row"><span>Tgt 1</span><span id="sell-t1">—</span></div>
+            <div class="level-row"><span>Tgt 2</span><span id="sell-t2">—</span></div>
+            <div class="level-row"><span>Tgt 3</span><span id="sell-t3">—</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<div id="popup-container"></div>
+
+<script>
+  // --- SECURITY SETTINGS ---
+  const SECRET_PASSWORD = "J8PRO";
+
+  function checkPassword() {
+    const input = document.getElementById('passwordInput');
+    const error = document.getElementById('errorMsg');
+    
+    if(input.value === SECRET_PASSWORD) {
+      document.getElementById('lockScreen').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'flex'; 
+      
+      // Initialize the app only after unlocking
+      initApp();
+    } else {
+      error.style.display = 'block';
+      input.value = '';
+      input.focus();
+      setTimeout(() => {
+        error.style.display = 'none';
+      }, 2000);
+    }
+  }
+
+  // Allow 'Enter' key to submit password
+  document.getElementById('passwordInput').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      checkPassword();
+    }
+  });
+
+  // --- Configuration ---
+  const tickers = [
+    // Indices
+    "^NSEI", "^NSEBANK", "^NIFTYFIN",
+    
+    // Major Heavyweights
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
+    "SBIN.NS", "BAJFINANCE.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
+    "LT.NS", "AXISBANK.NS", "HCLTECH.NS", "ASIANPAINT.NS", "MARUTI.NS",
+    "SUNPHARMA.NS", "TITAN.NS", "BAJAJFINSV.NS", "DMART.NS", "WIPRO.NS",
+    
+    // F&O & Energy
+    "ADANIENT.NS", "TATAMOTORS.NS", "POWERGRID.NS", "ONGC.NS",
+    "NTPC.NS", "ULTRACEMCO.NS", "M&M.NS", "HINDUNILVR.NS",
+    "CIPLA.NS", "DRREDDY.NS", "COALINDIA.NS", "GRASIM.NS", "BPCL.NS",
+    
+    // --- NEW STOCKS ADDED ---
+    "RICOAUTO.NS",    
+    "TMCV.NS",        
+    "NATIONALUM.NS",  
+
+    // --- METAL F&O STOCKS ---
+    "HINDALCO.NS",   
+    "TATASTEEL.NS",  
+    "JSWSTEEL.NS",   
+    "JINDALSTEL.NS", 
+    "SAIL.NS",       
+    "NMDC.NS",       
+    "MOIL.NS",       
+    "VEDL.NS",       
+    "WELCORP.NS",    
+    "APLAPOLLO.NS",  
+    "TATAMETALI.NS", 
+    "RATANJENG.NS",  
+    "MSTCLTD.NS",    
+    "NIACL.NS",      
+    "MANORG.NS"      
+  ];
+  
+  let appData = {
+    gainers: [],
+    losers: [],
+    currentStock: null
+  };
+
+  // --- Gann Logic ---
+  const GANN_STEPS = {
+    buy: { up: 0.333, avg: 0.250, sl: 0.166, t1: 0.416, t2: 0.500, t3: 0.666 },
+    sell: { below: -0.333, avg: -0.250, sl: 0.166, t1: -0.416, t2: -0.500, t3: -0.666 }
+  };
+
+  function calculateGann(price, multiplier) {
+    const baseSqrt = Math.sqrt(price);
+    const step = (val) => Math.pow(baseSqrt + (val * multiplier), 2);
+    
+    return {
+      buy: {
+        entry: step(GANN_STEPS.buy.up),
+        avg: step(GANN_STEPS.buy.avg),
+        sl: step(GANN_STEPS.buy.sl),
+        t1: step(GANN_STEPS.buy.t1),
+        t2: step(GANN_STEPS.buy.t2),
+        t3: step(GANN_STEPS.buy.t3)
+      },
+      sell: {
+        entry: step(GANN_STEPS.sell.below),
+        avg: step(GANN_STEPS.sell.avg),
+        sl: step(GANN_STEPS.sell.sl), 
+        t1: step(GANN_STEPS.sell.t1),
+        t2: step(GANN_STEPS.sell.t2),
+        t3: step(GANN_STEPS.sell.t3)
+      }
+    };
+  }
+
+  // --- Data Fetching (Real-Time) ---
+  async function fetchMarketData() {
+    document.getElementById('loader').classList.add('active');
+    
+    let stocks = [];
+
+    try {
+      const proxyUrl = "https://api.allorigins.win/get?url=";
+      
+      const promises = tickers.map(async (t) => {
+        try {
+          const url = `${proxyUrl}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?interval=1d&range=5d`)}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          const json = JSON.parse(data.contents);
+          
+          if(!json.chart || !json.chart.result) return null;
+
+          const meta = json.chart.result[0].meta;
+          const quotes = json.chart.result[0].indicators.quote[0];
+          const timestamps = json.chart.result[0].timestamp;
+
+          const livePrice = meta.regularMarketPrice;
+          const todayIdx = timestamps.length - 1;
+          const yestIdx = todayIdx - 1;
+          const validYestIdx = yestIdx >= 0 ? yestIdx : 0;
+
+          // Handle Indices formatting (^NSEI -> NIFTY 50)
+          let symbolName = t.replace('.NS', '');
+          if(symbolName === "^NSEI") symbolName = "NIFTY 50";
+          else if(symbolName === "^NSEBANK") symbolName = "BANK NIFTY";
+          else if(symbolName === "^NIFTYFIN") symbolName = "FINNIFTY";
+
+          const prevOpen = quotes.open[validYestIdx];
+          const prevHigh = quotes.high[validYestIdx];
+          const prevLow = quotes.low[validYestIdx];
+          const prevClose = quotes.close[validYestIdx];
+          
+          const change = livePrice - prevClose;
+          const pChange = (change / prevClose) * 100;
+
+          return {
+            symbol: symbolName,
+            price: livePrice,
+            change: change,
+            pChange: pChange,
+            o: prevOpen,
+            h: prevHigh,
+            l: prevLow,
+            c: prevClose
+          };
+        } catch (e) {
+          return null;
+        }
+      });
+
+      const results = await Promise.all(promises);
+      stocks = results.filter(r => r !== null);
+
+    } catch (err) {
+      console.error("Fetch error", err);
+      showPopup("System", "Using offline data mode (CORS Restricted)", "neutral");
+      stocks = generateOfflineData(tickers);
+    }
+
+    appData.gainers = stocks.filter(s => s.pChange > 0).sort((a,b) => b.pChange - a.pChange);
+    appData.losers = stocks.filter(s => s.pChange < 0).sort((a,b) => a.pChange - b.pChange);
+    
+    const firstStock = appData.gainers[0] || appData.losers[0];
+    if(firstStock) selectStock(firstStock.symbol);
+    
+    renderList('buy');
+    document.getElementById('loader').classList.remove('active');
+  }
+
+  function generateOfflineData(tickers) {
+    return tickers.map(t => {
+      let symbolName = t.replace('.NS', '');
+      if(symbolName === "^NSEI") symbolName = "NIFTY 50";
+      else if(symbolName === "^NSEBANK") symbolName = "BANK NIFTY";
+      else if(symbolName === "^NIFTYFIN") symbolName = "FINNIFTY";
+
+      const basePrice = Math.random() * 2000 + 100; 
+      const changeP = (Math.random() * 4) - 2; 
+      const livePrice = basePrice * (1 + changeP/100);
+      return {
+        symbol: symbolName,
+        price: livePrice,
+        change: livePrice - basePrice,
+        pChange: changeP,
+        o: basePrice * 0.99,
+        h: basePrice * 1.02,
+        l: basePrice * 0.98,
+        c: basePrice
+      };
+    });
+  }
+
+  // --- Alert Monitor ---
+  let lastAlertTime = 0;
+  function monitorAlerts() {
+    if(!appData.currentStock) return;
+
+    const alertInput = document.getElementById('inpAlert');
+    const alertPrice = parseFloat(alertInput.value);
+    const livePrice = appData.currentStock.price;
+
+    if(alertPrice && livePrice) {
+      const now = Date.now();
+      if(now - lastAlertTime > 10000) {
+        
+        if(livePrice >= alertPrice) {
+          alertInput.classList.remove('alert-active-sell');
+          alertInput.classList.add('alert-active-buy');
+          // Speak the alert
+          speakAlert(`Alert! ${appData.currentStock.symbol} crossed ${alertPrice}`);
+          showPopup("🚀 BREAKOUT ALERT", `${appData.currentStock.symbol} crossed ${alertPrice}!`, "alert");
+          lastAlertTime = now;
+        } else if (livePrice <= alertPrice) {
+           alertInput.classList.remove('alert-active-buy');
+           alertInput.classList.add('alert-active-sell');
+           // Speak the alert
+           speakAlert(`Alert! ${appData.currentStock.symbol} fell below ${alertPrice}`);
+           showPopup("📉 BREAKDOWN ALERT", `${appData.currentStock.symbol} fell below ${alertPrice}!`, "alert");
+           lastAlertTime = now;
+        } else {
+          alertInput.classList.remove('alert-active-buy', 'alert-active-sell');
+        }
+      }
+    }
+  }
+
+  // --- Voice Alert Function (Replaces Beep) ---
+  function speakAlert(text) {
+    // Browser ke built-in Text-to-Speech use karein
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-IN'; // Indian English accent
+      utterance.rate = 1.0; // Speed
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+  
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playBeep(freq = 440, type = 'sine') {
+    // Beep function disabled, using speakAlert now
+  }
+
+  // --- UI Rendering ---
+  function switchTab(type) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab[data-type="${type}"]`).classList.add('active');
+    renderList(type);
+  }
+
+  function renderList(type) {
+    const container = document.getElementById('stockListContainer');
+    const list = type === 'buy' ? appData.gainers : appData.losers;
+    
+    let html = '';
+    if(list.length === 0) html = '<div style="padding:20px; text-align:center; color:#666">No signals found</div>';
+    
+    list.forEach(s => {
+      const colorClass = s.pChange >= 0 ? 'up' : 'down';
+      const arrow = s.pChange >= 0 ? '▲' : '▼';
+      html += `
+        <div class="stock-item" onclick="selectStock('${s.symbol}')">
+          <div>
+            <span class="s-name">${s.symbol}</span>
+            <span class="s-price">₹${s.price.toFixed(2)}</span>
+          </div>
+          <div class="s-change ${colorClass}">
+            ${arrow} ${Math.abs(s.pChange).toFixed(2)}%
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function updateInputPrice() {
+    if(!appData.currentStock) return;
+    
+    const baseType = document.getElementById('inpBase').value;
+    let price = 0;
+
+    if(baseType === 'prevClose') price = appData.currentStock.c;
+    else if(baseType === 'prevHigh') price = appData.currentStock.h;
+    else if(baseType === 'prevLow') price = appData.currentStock.l;
+    else price = appData.currentStock.price;
+
+    document.getElementById('inpPrice').value = price.toFixed(2);
+    manualCalculate(); 
+  }
+
+  function selectStock(symbol) {
+    const stock = [...appData.gainers, ...appData.losers].find(s => s.symbol === symbol);
+    if(!stock) return;
+
+    appData.currentStock = stock;
+
+    document.getElementById('inpSymbol').value = stock.symbol;
+    
+    document.getElementById('ohlc-o').innerText = stock.o.toFixed(2);
+    document.getElementById('ohlc-h').innerText = stock.h.toFixed(2);
+    document.getElementById('ohlc-l').innerText = stock.l.toFixed(2);
+    document.getElementById('ohlc-c').innerText = stock.c.toFixed(2);
+
+    document.querySelectorAll('.stock-item').forEach(el => {
+      el.classList.remove('selected');
+      if(el.innerText.includes(symbol)) el.classList.add('selected');
+    });
+
+    if(stock.pChange > 1.5) showPopup("Buy Signal", `${stock.symbol} is strong!`, "buy");
+    else if(stock.pChange < -1.5) showPopup("Sell Signal", `${stock.symbol} is weak!`, "sell");
+
+    document.getElementById('inpAlert').value = '';
+    document.getElementById('inpAlert').classList.remove('alert-active-buy', 'alert-active-sell');
+    
+    updateInputPrice();
+  }
+
+  function manualCalculate() {
+    const price = parseFloat(document.getElementById('inpPrice').value);
+    const mult = parseFloat(document.getElementById('inpMult').value);
+    if(!price) return;
+
+    const levels = calculateGann(price, mult);
+
+    document.getElementById('buy-entry').innerText = levels.buy.entry.toFixed(2);
+    document.getElementById('buy-avg').innerText = levels.buy.avg.toFixed(2);
+    document.getElementById('buy-sl').innerText = levels.buy.sl.toFixed(2);
+    document.getElementById('buy-t1').innerText = levels.buy.t1.toFixed(2);
+    document.getElementById('buy-t2').innerText = levels.buy.t2.toFixed(2);
+    document.getElementById('buy-t3').innerText = levels.buy.t3.toFixed(2);
+
+    document.getElementById('sell-entry').innerText = levels.sell.entry.toFixed(2);
+    document.getElementById('sell-avg').innerText = levels.sell.avg.toFixed(2);
+    document.getElementById('sell-sl').innerText = levels.sell.sl.toFixed(2);
+    document.getElementById('sell-t1').innerText = levels.sell.t1.toFixed(2);
+    document.getElementById('sell-t2').innerText = levels.sell.t2.toFixed(2);
+    document.getElementById('sell-t3').innerText = levels.sell.t3.toFixed(2);
+    
+    const term = document.getElementById('inpTerm').value;
+  }
+
+  function showPopup(title, msg, type) {
+    const container = document.getElementById('popup-container');
+    const el = document.createElement('div');
+    el.className = `popup-card ${type}`;
+    
+    let icon = type === 'buy' ? '🟢' : (type === 'sell' ? '🔴' : 'ℹ️');
+    
+    el.innerHTML = `
+      <div class="popup-title">${icon} ${title}</div>
+      <div class="popup-msg">${msg}</div>
+    `;
+    
+    container.appendChild(el);
+    
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 300);
+    }, 3000);
+  }
+
+  function initApp() {
+    fetchMarketData();
+  }
+
+  setInterval(initApp, 60000); 
+  setInterval(monitorAlerts, 1000); 
+
+</script>
+</body>
+</html>
